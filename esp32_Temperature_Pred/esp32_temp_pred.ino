@@ -37,6 +37,14 @@ limitations under the License.
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
+#include "DHT.h"
+
+#define DHTPIN 13
+#define DHTTYPE DHT11
+//DHTTYPE = DHT11, but there are also DHT22 and 21
+
+DHT dht(DHTPIN, DHTTYPE); // constructor to declare our sensor
+
 // Globals pointers, used to address TensorFlow Lite components.
 // Pointers are not usual in Arduino sketches, future versions of
 // the library may change this...
@@ -55,6 +63,10 @@ constexpr int kTensorArenaSize = 2000;
 // alignas(16) directive is used to specify that the array 
 // should be stored in memory at an address that is a multiple of 16.
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+
+int i = 0 ;
+float temperatures[10];
+bool full = false;
 
 
 void setup() {
@@ -92,30 +104,42 @@ void setup() {
   output = interpreter->output(0);
 
   Serial.println("TensorFlow initialization OK!");
+
+  dht.begin();
 }
 
 
 void loop() {
 
-  float temperatures[10] = {
-    25.1, 25.3, 25.6, 25.8, 26.0,
-    26.1, 26.3, 26.4, 26.6, 26.8
-  };
-
-  for (int i = 0; i < 10; i++) {
-    input->data.f[i] = temperatures[i];
+  float t = dht.readTemperature();
+  temperatures[i]=t;
+  i++;
+  if(i==10){
+    i=0;
+    full=true;
   }
 
-  if (interpreter->Invoke() != kTfLiteOk) {
-    Serial.println("Invoke failed!");
-    return;
+  Serial.print("Temperature: ");
+  Serial.print(t);
+  Serial.print("°C, ");
+
+  if (full==true) {
+    for (int i = 0; i < 10; i++) {
+      input->data.f[i] = temperatures[i];
+    }
+
+    if (interpreter->Invoke() != kTfLiteOk) {
+      Serial.println("Invoke failed!");
+      return;
+    }
+
+    float prediction = output->data.f[0];
+
+    Serial.print("Predicted next temperature: ");
+    Serial.print(prediction);
+    Serial.println(" °C");
+
+    delay(1000);
   }
-
-  float prediction = output->data.f[0];
-
-  Serial.print("Predicted next temperature: ");
-  Serial.print(prediction);
-  Serial.println(" °C");
-
-  delay(1000);
 }
+
